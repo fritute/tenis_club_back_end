@@ -1,0 +1,22 @@
+[
+    {
+        "id": 1,
+        "produto_id": 1,
+        "fornecedor_id": 1,
+        "preco_fornecedor": 299.99,
+        "status": "Ativo",
+        "data_vinculo": "2026-02-14 22:06:29"
+    },
+    {
+        "id_produto": 8,
+        "id_fornecedor": 5,
+        "id": 3,
+        "data_cadastro": "2026-02-15 00:15:40"
+    },
+    {
+        "id_produto": 6,
+        "id_fornecedor": 4,
+        "id": 4,
+        "data_cadastro": "2026-02-14 21:20:12"
+    }
+]

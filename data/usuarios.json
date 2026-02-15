@@ -1,0 +1,39 @@
+[
+    {
+        "id": 1,
+        "nome": "Admin Sistema",
+        "email": "admin@virtualmarket.com",
+        "senha": "$2y$10$92IXUNpkjO0rOQ5byMi.Ye4oKoEa3Ro9llC\/.og\/at2.uheWG\/igi",
+        "nivel": "executivo",
+        "status": "ativo",
+        "criado_em": "2024-01-01 00:00:00",
+        "atualizado_em": "2024-01-01 00:00:00"
+    },
+    {
+        "id": 2,
+        "nome": "Admin Sistema",
+        "email": "admin@virtualmarket1.com",
+        "senha": "$2y$10$92IXUNpkjO0rOQ5byMi.Ye4oKoEa3Ro9llC\/.og\/at2.uheWG\/igi",
+        "nivel": "executivo",
+        "status": "ativo",
+        "criado_em": "2024-01-01 00:00:00",
+        "atualizado_em": "2024-01-01 00:00:00"
+    },
+    {
+        "nome": "Admin Sistema",
+        "email": "admin@sistema.com",
+        "senha": "$2y$12$W4LQA6bbOFLC39nbt\/sui.WVxgb0cHLuPFwVVs9JCOCwCxu4mB.fy",
+        "nivel": "executivo",
+        "data_cadastro": "2026-02-14 23:24:32",
+        "status": "Ativo",
+        "id": 3
+    },
+    {
+        "nome": "João Silva",
+        "email": "joao@email.com",
+        "senha": "$2y$12$3BfMVobrBjfM4aUwFTnGdOlfK0kSsDXKg6GLaPxWe\/Wn3yzOyTxzO",
+        "data_cadastro": "2026-02-14 23:33:16",
+        "status": "Ativo",
+        "id": 4
+    }
+]

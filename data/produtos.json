@@ -1,0 +1,70 @@
+[
+    {
+        "nome": "Tênis Teste API",
+        "descricao": "Produto criado para teste",
+        "categoria_id": 1,
+        "preco_base": 199.99,
+        "codigo_interno": "TEST-001",
+        "status": "Ativo",
+        "id": 3,
+        "data_cadastro": "2026-02-14 19:34:15"
+    },
+    {
+        "nome": "Produto Final Teste",
+        "descricao": "Teste com todos os campos obrigatórios",
+        "categoria_id": 1,
+        "preco_base": 399.99,
+        "codigo_interno": "FINAL-TEST-001",
+        "status": "Ativo",
+        "id": 4,
+        "data_cadastro": "2026-02-14 19:37:45"
+    },
+    {
+        "nome": "Tênis Sem Código",
+        "descricao": "Produto testando sem código interno",
+        "categoria_id": 1,
+        "preco_base": 149.99,
+        "status": "Ativo",
+        "id": 6,
+        "data_cadastro": "2026-02-14 19:44:26"
+    },
+    {
+        "nome": "Produto Mínimo",
+        "status": "Ativo",
+        "id": 7,
+        "data_cadastro": "2026-02-14 19:44:26"
+    },
+    {
+        "nome": "Tênis Sem Código",
+        "descricao": "Produto testando sem código interno",
+        "categoria_id": 1,
+        "preco_base": 149.99,
+        "status": "Ativo",
+        "id": 8,
+        "data_cadastro": "2026-02-14 19:44:46"
+    },
+    {
+        "nome": "Produto Mínimo",
+        "status": "Ativo",
+        "id": 9,
+        "data_cadastro": "2026-02-14 19:44:46"
+    },
+    {
+        "nome": "Tênis Air Jordan 4 ",
+        "descricao": "Tênis de basquete premium com tecnologia Air Max",
+        "categoria_id": 1,
+        "preco_base": 499.99,
+        "codigo_interno": "AIR-012",
+        "status": "Ativo",
+        "id": 10
+    },
+    {
+        "nome": "Tênis Air Jordan 5 ",
+        "descricao": "Tênis de basquete premium com tecnologia Air Max",
+        "categoria_id": 1,
+        "preco_base": 499.99,
+        "codigo_interno": "AIR-014",
+        "status": "Ativo",
+        "id": 11
+    }
+]

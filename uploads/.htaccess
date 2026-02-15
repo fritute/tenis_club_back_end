@@ -1,0 +1,20 @@
+# Permitir acesso às imagens
+<Files ~ "\.(jpg|jpeg|png|gif|webp)$">
+    Order allow,deny
+    Allow from all
+</Files>
+
+# Bloquear acesso a outros tipos de arquivo
+<Files ~ "\.(php|pl|py|jsp|asp|sh|cgi)$">
+    Order deny,allow
+    Deny from all
+</Files>
+
+# Configurações de cache para imagens
+<IfModule mod_expires.c>
+    ExpiresActive On
+    ExpiresByType image/jpeg "access plus 1 month"
+    ExpiresByType image/png "access plus 1 month"
+    ExpiresByType image/gif "access plus 1 month"
+    ExpiresByType image/webp "access plus 1 month"
+</IfModule>

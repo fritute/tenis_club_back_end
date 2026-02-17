@@ -62,7 +62,14 @@ abstract class BaseModel {
             }
             
             if (!empty($order_by)) {
-                $sql .= " ORDER BY " . $order_by;
+                // Validar ORDER BY para prevenir SQL Injection
+                // Permite apenas letras, números, underscore, espaços, vírgulas e pontos
+                if (!preg_match('/^[a-zA-Z0-9_\s,.]+$/', $order_by)) {
+                    error_log("Tentativa de SQL Injection em ORDER BY: " . $order_by);
+                    $order_by = ''; // Ignorar ordenação inválida
+                } else {
+                    $sql .= " ORDER BY " . $order_by;
+                }
             }
 
             $stmt = $this->conn->prepare($sql);
@@ -107,6 +114,14 @@ abstract class BaseModel {
     }
 
     /**
+     * Sanitizar identificador SQL (nome de tabela, coluna)
+     * Permite apenas letras, números e underscore
+     */
+    protected function sanitizeIdentifier($identifier) {
+        return preg_replace('/[^a-zA-Z0-9_]/', '', $identifier);
+    }
+
+    /**
      * Inserir novo registro
      * @param array $data
      * @return int ID do registro inserido ou 0 se falhou
@@ -126,15 +141,28 @@ abstract class BaseModel {
             return $newId;
         }
         try {
-            $columns = implode(', ', array_keys($data));
-            $placeholders = ':' . implode(', :', array_keys($data));
+            $columns = [];
+            $placeholders = [];
             
-            $sql = "INSERT INTO " . $this->table_name . " (" . $columns . ") VALUES (" . $placeholders . ")";
+            foreach ($data as $key => $value) {
+                // Sanitizar nome da coluna para evitar SQL Injection
+                $cleanKey = $this->sanitizeIdentifier($key);
+                if ($cleanKey !== $key) {
+                    continue; // Ignorar chaves inválidas
+                }
+                $columns[] = $cleanKey;
+                $placeholders[] = ':' . $cleanKey;
+            }
+            
+            $sql = "INSERT INTO " . $this->table_name . " (" . implode(', ', $columns) . ") VALUES (" . implode(', ', $placeholders) . ")";
             
             $stmt = $this->conn->prepare($sql);
             
             foreach ($data as $key => $value) {
-                $stmt->bindValue(':' . $key, $value);
+                $cleanKey = $this->sanitizeIdentifier($key);
+                if ($cleanKey === $key) {
+                    $stmt->bindValue(':' . $cleanKey, $value);
+                }
             }
             
             if ($stmt->execute()) {
@@ -173,10 +201,18 @@ abstract class BaseModel {
         }
         try {
             $set_clause = '';
-            foreach (array_keys($data) as $column) {
-                $set_clause .= $column . ' = :' . $column . ', ';
+            foreach ($data as $key => $value) {
+                // Sanitizar nome da coluna
+                $cleanKey = $this->sanitizeIdentifier($key);
+                if ($cleanKey === $key) {
+                    $set_clause .= $cleanKey . ' = :' . $cleanKey . ', ';
+                }
             }
             $set_clause = rtrim($set_clause, ', ');
+            
+            if (empty($set_clause)) {
+                return false;
+            }
             
             $sql = "UPDATE " . $this->table_name . " SET " . $set_clause . " WHERE " . $this->primary_key . " = :id";
             
@@ -184,7 +220,10 @@ abstract class BaseModel {
             $stmt->bindParam(':id', $id);
             
             foreach ($data as $key => $value) {
-                $stmt->bindValue(':' . $key, $value);
+                $cleanKey = $this->sanitizeIdentifier($key);
+                if ($cleanKey === $key) {
+                    $stmt->bindValue(':' . $cleanKey, $value);
+                }
             }
             
             return $stmt->execute();

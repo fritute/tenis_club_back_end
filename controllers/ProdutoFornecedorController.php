@@ -15,6 +15,64 @@ class ProdutoFornecedorController extends BaseController {
     }
 
     /**
+     * Definir fornecedor principal
+     * PUT /api/vinculos/{id_produto}/{id_fornecedor}/principal
+     */
+    public function setPrincipal($id_produto, $id_fornecedor) {
+        try {
+            if (!$this->isValidId($id_produto) || !$this->isValidId($id_fornecedor)) {
+                return $this->errorResponse('IDs inválidos', 400);
+            }
+
+            // Verificar se vínculo existe
+            if (!$this->produtoFornecedorModel->vinculoExists($id_produto, $id_fornecedor)) {
+                return $this->errorResponse('Vínculo não encontrado. Crie o vínculo antes de definir como principal.', 404);
+            }
+            
+            // Verificar status do fornecedor (opcional, mas recomendado)
+            require_once __DIR__ . '/../models/FornecedorModel.php';
+            $fornecedorModel = new FornecedorModel();
+            $fornecedor = $fornecedorModel->findById($id_fornecedor);
+            if ($fornecedor && strtolower($fornecedor['status']) !== 'ativo') {
+                return $this->errorResponse('Fornecedor inativo não pode ser definido como principal', 403);
+            }
+
+            if ($this->produtoFornecedorModel->setPrincipal($id_produto, $id_fornecedor)) {
+                $this->logActivity('SET_PRINCIPAL_FORNECEDOR', 'produto_fornecedor', null, [
+                    'produto_id' => $id_produto,
+                    'fornecedor_id' => $id_fornecedor
+                ]);
+                return $this->successResponse(null, 'Fornecedor definido como principal com sucesso');
+            } else {
+                return $this->errorResponse('Erro ao definir fornecedor principal');
+            }
+            
+        } catch (Exception $e) {
+            error_log("Erro em ProdutoFornecedorController::setPrincipal: " . $e->getMessage());
+            return $this->errorResponse('Erro interno ao definir principal');
+        }
+    }
+
+    /**
+     * Listar histórico de vínculos
+     * GET /api/vinculos/historico
+     * GET /api/vinculos/historico?produto_id=X
+     */
+    public function historico() {
+        try {
+            $id_produto = $_GET['produto_id'] ?? null;
+            
+            $historico = $this->produtoFornecedorModel->getHistorico($id_produto);
+            
+            return $this->successResponse($historico, 'Histórico de vínculos listado com sucesso');
+            
+        } catch (Exception $e) {
+            error_log("Erro em ProdutoFornecedorController::historico: " . $e->getMessage());
+            return $this->errorResponse('Erro ao listar histórico');
+        }
+    }
+
+    /**
      * Listar todos os vínculos
      * @param array $filters
      * @return array
@@ -38,33 +96,59 @@ class ProdutoFornecedorController extends BaseController {
      */
     public function store($data) {
         try {
-            // Validar dados obrigatórios
-            $required_fields = ['id_produto', 'id_fornecedor'];
-            $validation_errors = $this->validateRequiredFields($required_fields, $data);
-            
-            if (!empty($validation_errors)) {
-                return $this->validationErrorResponse($validation_errors);
-            }
+            // Normalizar entrada para aceitar tanto id_produto quanto produto_id
+            $id_produto = $data['id_produto'] ?? $data['produto_id'] ?? null;
+            $id_fornecedor = $data['id_fornecedor'] ?? $data['fornecedor_id'] ?? null;
 
+            if (!$id_produto || !$id_fornecedor) {
+                return $this->errorResponse('Campos id_produto e id_fornecedor são obrigatórios', 400);
+            }
+            
             // Validar IDs
-            if (!$this->isValidId($data['id_produto'])) {
+            if (!$this->isValidId($id_produto)) {
                 return $this->errorResponse('ID do produto inválido', 400);
             }
 
-            if (!$this->isValidId($data['id_fornecedor'])) {
+            if (!$this->isValidId($id_fornecedor)) {
                 return $this->errorResponse('ID do fornecedor inválido', 400);
+            }
+            
+            // Verificar status do fornecedor (impedido vincular se inativo)
+            require_once __DIR__ . '/../models/FornecedorModel.php';
+            $fornecedorModel = new FornecedorModel();
+            $fornecedor = $fornecedorModel->findById($id_fornecedor);
+            
+            if (!$fornecedor) {
+                return $this->errorResponse('Fornecedor não encontrado', 404);
+            }
+            
+            // Verifica status de forma case-insensitive
+            $status = $fornecedor['status'] ?? '';
+            if (strcasecmp($status, 'Ativo') !== 0) {
+                return $this->errorResponse('Não é possível vincular produtos a um fornecedor inativo', 403);
             }
 
             // Verificar se vínculo já existe
-            if ($this->produtoFornecedorModel->vinculoExists($data['id_produto'], $data['id_fornecedor'])) {
+            if ($this->produtoFornecedorModel->vinculoExists($id_produto, $id_fornecedor)) {
                 return $this->errorResponse('Vínculo já existe', 409);
             }
 
             // Criar vínculo
-            if ($this->produtoFornecedorModel->criarVinculo($data['id_produto'], $data['id_fornecedor'])) {
-                $this->logActivity('CREATE_VINCULO', 'produto_fornecedor', null, $data);
+            if ($this->produtoFornecedorModel->criarVinculo($id_produto, $id_fornecedor)) {
+                // Log activity
+                try {
+                     $this->logActivity('CREATE_VINCULO', 'produto_fornecedor', null, [
+                        'produto_id' => $id_produto, 
+                        'fornecedor_id' => $id_fornecedor
+                     ]);
+                } catch (Exception $e) {
+                     error_log("Erro de log: " . $e->getMessage());
+                }
                 
-                return $this->successResponse($data, 'Vínculo criado com sucesso', 201);
+                return $this->successResponse([
+                    'id_produto' => $id_produto,
+                    'id_fornecedor' => $id_fornecedor
+                ], 'Vínculo criado com sucesso', 201);
             } else {
                 return $this->errorResponse('Erro ao criar vínculo');
             }
@@ -107,37 +191,6 @@ class ProdutoFornecedorController extends BaseController {
         } catch (Exception $e) {
             error_log("Erro em ProdutoFornecedorController::delete: " . $e->getMessage());
             return $this->errorResponse('Erro interno ao remover vínculo');
-        }
-    }
-
-    /**     * Remover um vínculo por seu ID
-     * @param int $vinculo_id
-     * @return array
-     */
-    public function deleteById($vinculo_id) {
-        try {
-            if (!$this->isValidId($vinculo_id)) {
-                return $this->errorResponse('ID inválido', 400);
-            }
-
-            // Verificar se vínculo existe
-            $vinculo = $this->produtoFornecedorModel->findById($vinculo_id);
-            if (!$vinculo) {
-                return $this->errorResponse('Vínculo não encontrado', 404);
-            }
-
-            // Deletar por ID
-            if ($this->produtoFornecedorModel->deleteById($vinculo_id)) {
-                $this->logActivity('DELETE', 'vinculo', $vinculo_id, $vinculo);
-                
-                return $this->successResponse(null, 'Vínculo removido com sucesso');
-            } else {
-                return $this->errorResponse('Erro ao remover vínculo', 500);
-            }
-            
-        } catch (Exception $e) {
-            error_log("Erro em deleteById: " . $e->getMessage());
-            return $this->errorResponse('Erro interno do servidor', 500);
         }
     }
 

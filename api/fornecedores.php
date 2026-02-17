@@ -4,6 +4,28 @@
  * Virtual Market System
  */
 
+// CORS já configurado no router.php, mas garantir aqui também
+if (!headers_sent()) {
+    $allowed_origins = ['http://localhost:3000', 'http://localhost:3001', 'http://127.0.0.1:3000'];
+    $origin = $_SERVER['HTTP_ORIGIN'] ?? '';
+    if (in_array($origin, $allowed_origins)) {
+        header("Access-Control-Allow-Origin: {$origin}");
+    } else {
+        header("Access-Control-Allow-Origin: *");
+    }
+    header("Access-Control-Allow-Methods: GET, POST, PUT, DELETE, OPTIONS, PATCH");
+    header("Access-Control-Allow-Headers: Content-Type, Authorization, X-Requested-With, Accept");
+    header("Access-Control-Allow-Credentials: true");
+    header("Access-Control-Max-Age: 86400");
+    header('Content-Type: application/json; charset=utf-8');
+}
+
+// Tratar preflight OPTIONS request
+if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
+    http_response_code(200);
+    exit();
+}
+
 require_once __DIR__ . '/../controllers/FornecedorController.php';
 
 $controller = new FornecedorController();
@@ -21,9 +43,11 @@ if (isset($segments[0]) && $segments[0] === 'api') {
 $resource = $segments[0] ?? '';
 $action = $segments[1] ?? '';
 $id = $segments[2] ?? '';
+$subaction = $segments[3] ?? '';
 
-// Se action é numérico, é na verdade um ID
+// Se action é numérico, é na verdade um ID e id é uma sub-ação
 if (is_numeric($action)) {
+    $subaction = $id;
     $id = $action;
     $action = '';
 }
@@ -31,7 +55,11 @@ if (is_numeric($action)) {
 try {
     switch ($_SERVER['REQUEST_METHOD']) {
         case 'GET':
-            if ($action === 'ativos') {
+            if ($action === 'minha-loja') {
+                // GET /fornecedores/minha-loja
+                $result = $controller->minhaLoja();
+                
+            } else if ($action === 'ativos') {
                 // GET /fornecedores/ativos
                 $result = $controller->ativos();
                 
@@ -40,23 +68,39 @@ try {
                 $result = $controller->show($id);
                 
             } else {
-                // GET /fornecedores ou /fornecedores?filtros
-                $filters = [
-                    'nome' => $_GET['nome'] ?? '',
-                    'status' => $_GET['status'] ?? '',
-                    'cnpj' => $_GET['cnpj'] ?? ''
-                ];
-                
-                $result = $controller->index($filters);
+                // Verificar se é uma busca pela loja do usuário logado
+                if (isset($_GET['minha_loja']) && $_GET['minha_loja'] === 'true') {
+                    // GET /fornecedores?minha_loja=true
+                    $result = $controller->minhaLoja();
+                } else {
+                    // GET /fornecedores ou /fornecedores?filtros
+                    $filters = [
+                        'nome' => $_GET['nome'] ?? '',
+                        'status' => $_GET['status'] ?? '',
+                        'cnpj' => $_GET['cnpj'] ?? ''
+                    ];
+                    
+                    $result = $controller->index($filters);
+                }
             }
             break;
             
         case 'POST':
-            if ($action === 'status' && !empty($id)) {
-                // POST /fornecedores/{id}/status
+            if ($action === 'minha-loja') {
+                // POST /fornecedores/minha-loja (criar loja do fornecedor logado)
+                $data = json_decode(file_get_contents('php://input'), true);
+                
+                if (!$data) {
+                    $data = $_POST;
+                }
+                
+                $result = $controller->criarMinhaLoja($data);
+                
+            } else if ($subaction === 'status' && !empty($id)) {
+                // POST /fornecedores/{id}/status - Alterar status da loja
                 $data = json_decode(file_get_contents('php://input'), true);
                 $status = $data['status'] ?? '';
-                $result = $controller->alterarStatus($id, $status);
+                $result = $controller->alterarStatusLoja($id, $status);
                 
             } else {
                 // POST /fornecedores
@@ -115,13 +159,27 @@ try {
     // Retornar resposta JSON
     echo json_encode($result, JSON_UNESCAPED_UNICODE);
     
+} catch (PDOException $e) {
+    error_log("Erro PDO no endpoint fornecedores: " . $e->getMessage());
+    error_log("SQL State: " . $e->getCode());
+    error_log("SQL Error Info: " . print_r($e->errorInfo ?? [], true));
+    
+    http_response_code(500);
+    echo json_encode([
+        'success' => false,
+        'message' => 'Erro ao conectar ao banco de dados',
+        'code' => 500,
+        'error' => $e->getMessage()
+    ], JSON_UNESCAPED_UNICODE);
 } catch (Exception $e) {
     error_log("Erro no endpoint fornecedores: " . $e->getMessage());
+    error_log("Stack trace: " . $e->getTraceAsString());
     
     http_response_code(500);
     echo json_encode([
         'success' => false,
         'message' => 'Erro interno do servidor',
-        'code' => 500
+        'code' => 500,
+        'error' => $e->getMessage()
     ], JSON_UNESCAPED_UNICODE);
 }

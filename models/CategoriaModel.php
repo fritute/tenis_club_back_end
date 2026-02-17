@@ -81,7 +81,7 @@ class CategoriaModel extends BaseModel {
      */
     public function countProdutos($id_categoria) {
         try {
-            $sql = "SELECT COUNT(*) as total FROM produtos WHERE id_categoria = :id";
+            $sql = "SELECT COUNT(*) as total FROM produtos WHERE categoria_id = :id";
             $stmt = $this->conn->prepare($sql);
             $stmt->bindParam(':id', $id_categoria);
             $stmt->execute();
@@ -103,16 +103,16 @@ class CategoriaModel extends BaseModel {
         try {
             $sql = "
                 SELECT 
-                    c.id_categoria,
+                    c.id,
                     c.nome,
                     c.descricao,
                     c.status,
-                    c.created_at,
-                    COUNT(p.id_produto) as total_produtos,
+                    c.data_criacao,
+                    COUNT(p.id) as total_produtos,
                     COUNT(CASE WHEN p.status = 'Ativo' THEN 1 END) as produtos_ativos
                 FROM categorias c
-                LEFT JOIN produtos p ON c.id_categoria = p.id_categoria
-                GROUP BY c.id_categoria
+                LEFT JOIN produtos p ON c.id = p.categoria_id
+                GROUP BY c.id
                 ORDER BY c.nome
             ";
             
@@ -133,24 +133,24 @@ class CategoriaModel extends BaseModel {
         try {
             $sql = "
                 SELECT 
-                    c.id_categoria,
+                    c.id,
                     c.nome,
                     c.descricao,
-                    COUNT(p.id_produto) as total_produtos,
+                    COUNT(p.id) as total_produtos,
                     COUNT(CASE WHEN p.status = 'Ativo' THEN 1 END) as produtos_ativos,
-                    COUNT(DISTINCT pf.id_fornecedor) as total_fornecedores
+                    COUNT(DISTINCT pf.fornecedor_id) as total_fornecedores
                 FROM categorias c
-                LEFT JOIN produtos p ON c.id_categoria = p.id_categoria
-                LEFT JOIN produto_fornecedor pf ON p.id_produto = pf.id_produto
+                LEFT JOIN produtos p ON c.id = p.categoria_id
+                LEFT JOIN produto_fornecedor pf ON (p.id = pf.produto_id OR p.id = pf.id_produto)
                 WHERE c.status = 'Ativo'
-                GROUP BY c.id_categoria
+                GROUP BY c.id
                 HAVING total_produtos > 0
                 ORDER BY total_produtos DESC, produtos_ativos DESC
                 LIMIT :limit
             ";
             
             $stmt = $this->conn->prepare($sql);
-            $stmt->bindValue(':limit', $limit, PDO::PARAM_INT);
+            $stmt->bindValue(':limit', (int)$limit, PDO::PARAM_INT);
             $stmt->execute();
             
             return $stmt->fetchAll();

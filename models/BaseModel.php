@@ -11,10 +11,21 @@ abstract class BaseModel {
     protected $conn;
     protected $table_name;
     protected $primary_key;
+    private $data_dir;
 
     public function __construct() {
-        $this->db = new Database();
-        $this->conn = $this->db->getConnection();
+        $forceDb = in_array(strtolower(getenv('DB_REQUIRE') ?: ''), ['1','true','yes']);
+        try {
+            $this->db = new Database();
+            $this->conn = $this->db->getConnection();
+        } catch (Throwable $e) {
+            if ($forceDb) {
+                throw $e;
+            }
+            $this->db = null;
+            $this->conn = null;
+        }
+        $this->data_dir = __DIR__ . '/../data';
     }
 
     /**
@@ -25,6 +36,24 @@ abstract class BaseModel {
      * @return array
      */
     public function findAll($where = '', $params = [], $order_by = '') {
+        if (!$this->conn) {
+            $rows = $this->readDataFile();
+            if (!empty($order_by)) {
+                $parts = preg_split('/\s+/', $order_by);
+                $col = $parts[0] ?? null;
+                $dir = strtoupper($parts[1] ?? 'ASC');
+                if ($col) {
+                    usort($rows, function($a, $b) use ($col, $dir) {
+                        $va = $a[$col] ?? null;
+                        $vb = $b[$col] ?? null;
+                        if ($va == $vb) return 0;
+                        $cmp = ($va < $vb) ? -1 : 1;
+                        return $dir === 'DESC' ? -$cmp : $cmp;
+                    });
+                }
+            }
+            return $rows;
+        }
         try {
             $sql = "SELECT * FROM " . $this->table_name;
             
@@ -53,6 +82,15 @@ abstract class BaseModel {
      * @return array|null
      */
     public function findById($id) {
+        if (!$this->conn) {
+            $rows = $this->readDataFile();
+            foreach ($rows as $row) {
+                if ((string)($row[$this->primary_key] ?? null) === (string)$id) {
+                    return $row;
+                }
+            }
+            return null;
+        }
         try {
             $sql = "SELECT * FROM " . $this->table_name . " WHERE " . $this->primary_key . " = :id";
             $stmt = $this->conn->prepare($sql);
@@ -74,6 +112,19 @@ abstract class BaseModel {
      * @return int ID do registro inserido ou 0 se falhou
      */
     public function create($data) {
+        if (!$this->conn) {
+            $rows = $this->readDataFile();
+            $maxId = 0;
+            foreach ($rows as $r) {
+                $rid = (int)($r[$this->primary_key] ?? 0);
+                if ($rid > $maxId) $maxId = $rid;
+            }
+            $newId = $maxId + 1;
+            $data[$this->primary_key] = $newId;
+            $rows[] = $data;
+            $this->writeDataFile($rows);
+            return $newId;
+        }
         try {
             $columns = implode(', ', array_keys($data));
             $placeholders = ':' . implode(', :', array_keys($data));
@@ -105,6 +156,21 @@ abstract class BaseModel {
      * @return bool
      */
     public function update($id, $data) {
+        if (!$this->conn) {
+            $rows = $this->readDataFile();
+            $updated = false;
+            foreach ($rows as $i => $row) {
+                if ((string)($row[$this->primary_key] ?? null) === (string)$id) {
+                    $rows[$i] = array_merge($row, $data);
+                    $updated = true;
+                    break;
+                }
+            }
+            if ($updated) {
+                $this->writeDataFile($rows);
+            }
+            return $updated;
+        }
         try {
             $set_clause = '';
             foreach (array_keys($data) as $column) {
@@ -135,6 +201,22 @@ abstract class BaseModel {
      * @return bool
      */
     public function delete($id) {
+        if (!$this->conn) {
+            $rows = $this->readDataFile();
+            $new = [];
+            $deleted = false;
+            foreach ($rows as $row) {
+                if ((string)($row[$this->primary_key] ?? null) === (string)$id) {
+                    $deleted = true;
+                    continue;
+                }
+                $new[] = $row;
+            }
+            if ($deleted) {
+                $this->writeDataFile($new);
+            }
+            return $deleted;
+        }
         try {
             $sql = "DELETE FROM " . $this->table_name . " WHERE " . $this->primary_key . " = :id";
             $stmt = $this->conn->prepare($sql);
@@ -155,6 +237,10 @@ abstract class BaseModel {
      * @return int
      */
     public function count($where = '', $params = []) {
+        if (!$this->conn) {
+            $rows = $this->readDataFile();
+            return count($rows);
+        }
         try {
             $sql = "SELECT COUNT(*) as total FROM " . $this->table_name;
             
@@ -181,6 +267,9 @@ abstract class BaseModel {
      * @return array
      */
     protected function executeQuery($sql, $params = []) {
+        if (!$this->conn) {
+            return [];
+        }
         try {
             $stmt = $this->conn->prepare($sql);
             $stmt->execute($params);
@@ -193,12 +282,33 @@ abstract class BaseModel {
         }
     }
 
+    private function getDataFilePath() {
+        $file = $this->data_dir . '/' . $this->table_name . '.json';
+        return $file;
+    }
+
+    private function readDataFile() {
+        $file = $this->getDataFilePath();
+        if (!file_exists($file)) {
+            return [];
+        }
+        $json = file_get_contents($file);
+        $data = json_decode($json, true);
+        return is_array($data) ? $data : [];
+        }
+
+    private function writeDataFile($rows) {
+        $file = $this->getDataFilePath();
+        $json = json_encode(array_values($rows), JSON_UNESCAPED_UNICODE | JSON_PRETTY_PRINT);
+        file_put_contents($file, $json);
+    }
+
     /**
      * Destructor - fechar conexão
      */
     public function __destruct() {
-        if ($this->db) {
-            $this->db->closeConnection();
-        }
+        // PDO fecha automaticamente a conexão quando o objeto é destruído
+        $this->conn = null;
+        $this->db = null;
     }
 }

@@ -2,6 +2,219 @@
 
 Sistema completo de gestão de produtos desenvolvido em **PHP puro** com **armazenamento JSON** e arquitetura **MVC**, oferecendo API RESTful para comunicação AJAX.
 
+---
+
+## 🚀 Como Rodar o Projeto
+
+### Pré-requisitos
+- **PHP 8.0+** instalado
+- Extensões: `json`, `fileinfo`, `gd`
+- **Não precisa** de MySQL ou Apache
+
+### Passos para Executar
+
+1. **Clone ou navegue até a pasta do projeto:**
+   ```bash
+   cd "C:\Users\Gustavo\Documents\Codigos\virtual market\back end"
+   ```
+
+2. **Inicie o servidor PHP:**
+   ```bash
+   php -S localhost:8000 router.php
+   ```
+   > ⚠️ **IMPORTANTE:** Use exatamente `router.php` - ele é essencial para o funcionamento!
+
+3. **Acesse a API:**
+   - Base URL: `http://localhost:8000/api`
+   - Teste: `http://localhost:8000/api/produtos`
+
+### Usuários de Teste
+
+| Email | Senha | Nível | Acesso |
+|-------|-------|-------|--------|
+| `admin@sistema.com` | `admin123` | executivo | Total |
+| `fornecedor@teste.com` | `forn123` | fornecedor | Gerenciar produtos |
+| `usuario@teste.com` | `user123` | comum | Limitado |
+
+### Testar se Está Funcionando
+```bash
+# Listar produtos
+curl http://localhost:8000/api/produtos
+
+# Fazer login
+curl -X POST http://localhost:8000/api/usuarios/login \
+  -H "Content-Type: application/json" \
+  -d '{"email":"admin@sistema.com","senha":"admin123"}'
+```
+
+---
+
+## 📡 Documentação Rápida da API
+
+**Base URL:** `http://localhost:8000/api`
+
+### 🔐 Autenticação
+
+#### Login
+```http
+POST /api/usuarios/login
+Content-Type: application/json
+
+{
+  "email": "admin@sistema.com",
+  "senha": "admin123"
+}
+
+Resposta: { "success": true, "token": "...", "data": {...} }
+```
+
+#### Validar Token
+```http
+POST /api/usuarios/validar-token
+Authorization: Bearer {token}
+```
+
+### 👤 Usuários
+
+```http
+GET    /api/usuarios           # Listar todos (executivo)
+GET    /api/usuarios/perfil    # Ver perfil próprio
+GET    /api/usuarios/{id}      # Buscar por ID
+POST   /api/usuarios           # Criar usuário
+PUT    /api/usuarios/{id}      # Atualizar
+DELETE /api/usuarios/{id}      # Deletar
+```
+
+### 📦 Produtos
+
+```http
+GET    /api/produtos                      # Listar todos
+GET    /api/produtos/{id}                 # Buscar por ID
+GET    /api/produtos/ativos               # Apenas ativos
+GET    /api/produtos/minha-empresa        # Produtos da empresa (fornecedor)
+GET    /api/produtos?fornecedor_id={id}   # Filtrar por fornecedor
+GET    /api/produtos?categoria_id={id}    # Filtrar por categoria
+GET    /api/produtos?nome={termo}         # Buscar por nome
+POST   /api/produtos                      # Criar produto
+PUT    /api/produtos/{id}                 # Atualizar
+DELETE /api/produtos/{id}                 # Deletar (soft delete)
+```
+
+**Exemplo de Criação:**
+```json
+{
+  "nome": "Tênis Nike Air Max",
+  "descricao": "Tênis esportivo confortável",
+  "categoria_id": 1,
+  "fornecedor_id": 1,
+  "preco": 299.90,
+  "estoque": 50
+}
+```
+
+### 🏢 Fornecedores
+
+```http
+GET    /api/fornecedores              # Listar todos
+GET    /api/fornecedores/{id}         # Buscar por ID
+GET    /api/fornecedores/ativos       # Apenas ativos
+GET    /api/fornecedores/minha-loja   # Loja do fornecedor logado
+POST   /api/fornecedores              # Criar fornecedor
+POST   /api/fornecedores/minha-loja   # Criar minha loja
+PUT    /api/fornecedores/{id}         # Atualizar
+DELETE /api/fornecedores/{id}         # Deletar
+```
+
+### 📂 Categorias
+
+```http
+GET    /api/categorias           # Listar todas
+GET    /api/categorias/{id}      # Buscar por ID
+GET    /api/categorias/ativas    # Apenas ativas
+POST   /api/categorias           # Criar categoria
+PUT    /api/categorias/{id}      # Atualizar
+DELETE /api/categorias/{id}      # Deletar
+```
+
+### 🖼️ Imagens de Produtos
+
+```http
+GET    /api/produtos/imagens?produto_id={id}  # Listar imagens do produto
+GET    /api/produtos/imagens/{id}             # Buscar imagem por ID
+POST   /api/produtos/imagens                  # Upload (multipart/form-data)
+PUT    /api/produtos/imagens/{id}             # Atualizar metadados
+PUT    /api/produtos/imagens/{id}/principal   # Definir como principal
+PUT    /api/produtos/imagens/{id}/ordem       # Alterar ordem
+DELETE /api/produtos/imagens/{id}             # Deletar (soft delete)
+```
+
+**Exemplo de Upload:**
+```javascript
+const formData = new FormData();
+formData.append('imagem', arquivo);
+formData.append('produto_id', '1');
+formData.append('descricao', 'Imagem frontal');
+formData.append('eh_principal', 'true');
+
+fetch('http://localhost:8000/api/produtos/imagens', {
+  method: 'POST',
+  body: formData
+});
+```
+
+### 🛒 Pedidos
+
+```http
+GET    /api/pedidos                    # Listar todos (executivo)
+GET    /api/pedidos/{id}               # Buscar por ID
+GET    /api/pedidos/meus               # Meus pedidos (usuário)
+GET    /api/pedidos/recebidos          # Pedidos recebidos (fornecedor)
+GET    /api/pedidos/estatisticas       # Estatísticas (fornecedor)
+POST   /api/pedidos                    # Criar pedido
+PUT    /api/pedidos/{id}/status        # Atualizar status
+PUT    /api/pedidos/{id}/cancelar      # Cancelar pedido
+```
+
+### 📊 Relatórios
+
+```http
+GET    /api/relatorios                # Tipos disponíveis
+GET    /api/relatorios/dashboard      # KPIs principais
+GET    /api/relatorios/fornecedores   # Relatório de fornecedores
+GET    /api/relatorios/produtos       # Relatório de produtos
+GET    /api/relatorios/categorias     # Estatísticas por categoria
+GET    /api/relatorios/financeiro     # Análise financeira
+```
+
+### 📋 Estrutura de Resposta
+
+**Sucesso:**
+```json
+{
+  "success": true,
+  "data": { ... },
+  "message": "Operação realizada com sucesso"
+}
+```
+
+**Erro:**
+```json
+{
+  "success": false,
+  "error": "Mensagem do erro",
+  "code": 400
+}
+```
+
+### 🔑 Autenticação em Requisições
+
+Para endpoints que requerem autenticação, adicione o header:
+```http
+Authorization: Bearer {seu_token_jwt}
+```
+
+---
+
 ## 🏗️ Arquitetura do Sistema
 
 ### Tecnologias
@@ -46,6 +259,7 @@ back end/
 │   ├── produtos.php          # Endpoints de produtos
 │   ├── categorias.php        # Endpoints de categorias
 │   ├── usuarios.php          # Endpoints de autenticação
+│   ├── relatorios.php        # Endpoints de relatórios e dashboard
 │   └── produtos/
 │       └── imagens.php       # Endpoints de imagens
 ├── uploads/                   # Diretório de uploads
@@ -89,6 +303,9 @@ back end/
 }
 ```
 
+**Relacionamento com Produtos:**
+Produtos têm um campo `fornecedor_id` que referencia o `id` do fornecedor.
+
 #### 3. **categorias.json**
 ```json
 {
@@ -108,11 +325,18 @@ back end/
   "email": "admin@sistema.com",
   "senha": "$2y$10$...", 
   "nivel": "executivo",
+  "fornecedor_id": null,
   "status": "ativo",
   "criado_em": "2024-12-25 10:00:00",
   "ultimo_acesso": "2024-12-25 15:30:00"
 }
 ```
+
+**Campo `fornecedor_id`:**
+- Para usuários do tipo `fornecedor`, este campo vincula o usuário a uma empresa
+- Múltiplos usuários podem ter o mesmo `fornecedor_id`
+- Permite controle de acesso aos produtos da empresa
+- Usuários `executivo` e `comum` geralmente têm este campo como `null`
 
 #### 5. **produto_imagens.json**
 ```json
@@ -228,12 +452,23 @@ DELETE /api/usuarios/{id}           # Deletar usuário
 
 ### 2. **Produtos** (`/api/produtos`)
 ```http
-GET    /api/produtos               # Listar todos
-GET    /api/produtos/{id}          # Buscar por ID
-POST   /api/produtos               # Criar novo
-PUT    /api/produtos/{id}          # Atualizar
-DELETE /api/produtos/{id}          # Excluir (soft delete)
+GET    /api/produtos                         # Listar todos
+GET    /api/produtos?fornecedor_id={id}      # Listar por fornecedor/empresa
+GET    /api/produtos?categoria_id={id}       # Listar por categoria
+GET    /api/produtos?nome={termo}            # Buscar por nome
+GET    /api/produtos/minha-empresa           # Produtos da empresa do usuário logado
+GET    /api/produtos/{id}                    # Buscar por ID
+POST   /api/produtos                         # Criar novo
+PUT    /api/produtos/{id}                    # Atualizar
+DELETE /api/produtos/{id}                    # Excluir (soft delete)
 ```
+
+**Filtros disponíveis:**
+- `fornecedor_id`: Listar produtos de um fornecedor específico
+- `categoria_id`: Listar produtos de uma categoria específica
+- `nome`: Buscar por nome (busca parcial)
+- `status`: Filtrar por status (Ativo/Inativo)
+- `codigo_interno`: Buscar por código interno
 
 ### 3. **Fornecedores** (`/api/fornecedores`)
 ```http
@@ -271,6 +506,25 @@ GET    /api/logs                   # Listar atividades (executivo)
 GET    /api/logs?usuario_id={id}   # Filtrar por usuário
 GET    /api/logs?tabela={nome}     # Filtrar por tabela
 ```
+
+### 7. **Relatórios e Dashboard** (`/api/relatorios`)
+```http
+GET    /api/relatorios             # Listar tipos de relatórios disponíveis
+GET    /api/relatorios/dashboard   # KPIs principais do sistema
+GET    /api/relatorios/fornecedores # Relatório detalhado de fornecedores
+GET    /api/relatorios/produtos    # Relatório detalhado de produtos
+GET    /api/relatorios/categorias  # Estatísticas por categoria
+GET    /api/relatorios/vinculos    # Relatório de relacionamentos produto-fornecedor
+GET    /api/relatorios/financeiro  # Análise financeira e comparação de preços
+```
+
+**Relatórios disponíveis:**
+- **Dashboard**: Visão geral com total de fornecedores, produtos, categorias e rankings
+- **Fornecedores**: Lista completa com total de produtos vinculados e avaliações
+- **Produtos**: Relatório com informações de categoria, fornecedor e preços
+- **Categorias**: Estatísticas de produtos por categoria
+- **Vínculos**: Análise de relacionamentos entre produtos e fornecedores
+- **Financeiro**: Comparação de preços, melhores ofertas e análise de economia
 
 ## 🔐 Sistema de Autenticação
 
@@ -340,6 +594,16 @@ console.log(data.token); // Token JWT para próximas requisições
 - Registro automático de todas as operações
 - Rastreamento por usuário e data
 - Histórico completo de alterações
+
+### 7. **Relatórios e Business Intelligence**
+- **Dashboard executivo** com KPIs principais
+- **Relatório de fornecedores** com estatísticas de produtos vinculados
+- **Relatório de produtos** com informações de categoria e fornecedor
+- **Análise por categorias** com distribuição de produtos
+- **Relatório de vínculos** produto-fornecedor
+- **Análise financeira** com comparação de preços
+- Exportação de dados em formato JSON para integração
+- Métricas em tempo real do sistema
 
 ## 🔒 Segurança Implementada
 
@@ -435,6 +699,81 @@ async function criarProduto(dados) {
 }
 ```
 
+### Exemplo 4: Listar Produtos por Fornecedor
+```javascript
+// Listar produtos de um fornecedor específico
+async function produtosPorFornecedor(fornecedorId) {
+    const response = await fetch(`http://localhost:8000/api/produtos?fornecedor_id=${fornecedorId}`);
+    const produtos = await response.json();
+    
+    console.log(`Produtos do fornecedor ${fornecedorId}:`, produtos);
+}
+
+// Listar produtos da minha empresa (usuário logado)
+async function produtosDaMinhaEmpresa(token) {
+    const response = await fetch('http://localhost:8000/api/produtos/minha-empresa', {
+        headers: {
+            'Authorization': `Bearer ${token}`
+        }
+    });
+    
+    const produtos = await response.json();
+    console.log('Produtos da minha empresa:', produtos);
+}
+
+// Criar produto para minha empresa
+async function criarProdutoEmpresa(token, fornecedorId) {
+    const response = await fetch('http://localhost:8000/api/produtos', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({
+            nome: 'Tênis Nike React',
+            descricao: 'Novo modelo 2026',
+            categoria_id: 1,
+            fornecedor_id: fornecedorId,
+            preco: 399.90,
+            estoque: 100
+        })
+    });
+    
+    return await response.json();
+}
+```
+
+### Exemplo 5: Dashboard e Relatórios
+```javascript
+// Buscar dashboard com KPIs principais
+async function buscarDashboard() {
+    const response = await fetch('http://localhost:8000/api/relatorios/dashboard');
+    const dashboard = await response.json();
+    
+    console.log('Total Fornecedores:', dashboard.total_fornecedores);
+    console.log('Total Produtos:', dashboard.total_produtos);
+    console.log('Total Categorias:', dashboard.total_categorias);
+}
+
+// Buscar relatório de fornecedores
+async function relatorioFornecedores() {
+    const response = await fetch('http://localhost:8000/api/relatorios/fornecedores');
+    const relatorio = await response.json();
+    
+    relatorio.forEach(fornecedor => {
+        console.log(`${fornecedor.nome} - ${fornecedor.total_produtos} produtos`);
+    });
+}
+
+// Buscar análise financeira
+async function relatorioFinanceiro() {
+    const response = await fetch('http://localhost:8000/api/relatorios/financeiro');
+    const analise = await response.json();
+    
+    console.log('Economia potencial:', analise.economia_potencial);
+}
+```
+
 ## 📦 Estrutura de Resposta da API
 
 ### Sucesso (200, 201)
@@ -469,6 +808,18 @@ curl http://localhost:8000/api/produtos/1
 curl -X POST http://localhost:8000/api/usuarios/login \
   -H "Content-Type: application/json" \
   -d '{"email":"admin@sistema.com","senha":"admin123"}'
+
+# Testar dashboard
+curl http://localhost:8000/api/relatorios/dashboard
+
+# Testar relatório de fornecedores
+curl http://localhost:8000/api/relatorios/fornecedores
+
+# Testar relatório de produtos
+curl http://localhost:8000/api/relatorios/produtos
+
+# Listar relatórios disponíveis
+curl http://localhost:8000/api/relatorios
 ```
 
 ### Teste Automatizado
@@ -481,9 +832,9 @@ php teste_imagens.php
 
 ### ✅ **Completo e Robusto**
 - Sistema 100% funcional sem dependências de MySQL
-- 4 recursos principais (Produtos, Fornecedores, Categorias, Usuários)
+- 5 recursos principais (Produtos, Fornecedores, Categorias, Usuários, Relatórios)
 - Sistema de imagens multi-upload totalmente operacional
-- API RESTful com 40+ endpoints
+- API RESTful com 50+ endpoints incluindo relatórios e dashboard
 
 ### ✅ **Arquitetura Profissional**
 - Padrão MVC rigorosamente implementado
@@ -538,13 +889,38 @@ A arquitetura usando **JSON** elimina a necessidade de banco de dados tradiciona
 **Sistema desenvolvido com PHP puro**, seguindo as melhores práticas de desenvolvimento web e padrões de mercado.
 
 ### Status Atual
-✅ **PRODUÇÃO READY**
-- 10/10 testes passando
+✅ **VERSÃO 2.2.2 - PRODUÇÃO READY**
+- **51 endpoints** 100% funcionais
 - Sistema de imagens 100% funcional
-- API totalmente documentada  
-- Pronto para uso
+- **Sistema de loja para fornecedores** implementado
+- **Filtro automático de produtos** por nível de usuário
+- **Logs estruturados** em arquivo
+- **CORS configurado** para frontend
+- API totalmente documentada
+- Pronto para uso em produção
+
+### 📚 Documentação Adicional
+- **[CHANGELOG.md](CHANGELOG.md)** - Histórico completo de versões e alterações
+- **[CORRECOES.md](CORRECOES.md)** - Detalhamento das correções de bugs (v2.2.1)
+- **[LOJA_FORNECEDOR.md](LOJA_FORNECEDOR.md)** - Guia completo do sistema de lojas (v2.2.2)
+- **[API_DOCUMENTACAO.md](API_DOCUMENTACAO.md)** - Documentação completa da API
+
+### 🆕 Novidades v2.2.2 (15/02/2026)
+- ✅ Fornecedores criam sua própria loja após registro
+- ✅ Fornecedores visualizam apenas seus produtos
+- ✅ Endpoints: GET/POST `/api/fornecedores/minha-loja`
+- ✅ Vinculação automática de loja com usuário
+- ✅ Validação: uma loja por fornecedor
+
+### 🛠️ Correções v2.2.1 (15/02/2026)
+- ✅ Warnings PHP eliminados (JSON limpo)
+- ✅ CORS configurado (frontend conecta sem bloqueios)
+- ✅ Sistema de logs implementado
+- ✅ Campo 'nivel' protegido em toda aplicação
+- ✅ Migração de banco executada com sucesso
 
 ---
 
-**Virtual Market System** - *Gestão Moderna de E-commerce*#   t e n i s _ c l u b _ b a c k _ e n d  
+**Virtual Market System v2.2.2** - *Gestão Moderna de E-commerce*#   t e n i s _ c l u b _ b a c k _ e n d 
+ 
  

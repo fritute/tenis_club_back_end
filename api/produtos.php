@@ -4,9 +4,40 @@
  * Virtual Market System
  */
 
-require_once __DIR__ . '/../controllers/ProdutoController.php';
+// CORS já configurado no router.php, mas garantir aqui também
+if (!headers_sent()) {
+    $allowed_origins = ['http://localhost:3000', 'http://localhost:3001', 'http://127.0.0.1:3000', 'http://localhost:5173', 'http://127.0.0.1:5173'];
+    $origin = $_SERVER['HTTP_ORIGIN'] ?? '';
+    if ($origin && in_array($origin, $allowed_origins)) {
+        header("Access-Control-Allow-Origin: {$origin}");
+        header("Access-Control-Allow-Credentials: true");
+    } else {
+        header("Access-Control-Allow-Origin: *");
+    }
+    header("Vary: Origin");
+    header("Access-Control-Allow-Methods: GET, POST, PUT, DELETE, OPTIONS, PATCH");
+    header("Access-Control-Allow-Headers: Content-Type, Authorization, X-Requested-With, Accept");
+    header("Access-Control-Max-Age: 86400");
+    header('Content-Type: application/json; charset=utf-8');
+}
 
-$controller = new ProdutoController();
+// Tratar preflight OPTIONS request
+if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
+    http_response_code(200);
+    exit();
+}
+
+// Debug simples
+if (isset($_GET['debug'])) {
+    echo json_encode([
+        'message' => 'Endpoint produtos funcionando',
+        'uri' => $_SERVER['REQUEST_URI'],
+        'method' => $_SERVER['REQUEST_METHOD']
+    ]);
+    exit();
+}
+
+require_once __DIR__ . '/../controllers/ProdutoController.php';
 
 // Definir variáveis de roteamento
 $request_uri = $_SERVER['REQUEST_URI'];
@@ -21,9 +52,11 @@ if (isset($segments[0]) && $segments[0] === 'api') {
 $resource = $segments[0] ?? '';
 $action = $segments[1] ?? '';
 $id = $segments[2] ?? '';
+$subaction = $segments[3] ?? '';
 
-// Se action é numérico, é na verdade um ID
+// Se action é numérico, é na verdade um ID e id é uma sub-ação
 if (is_numeric($action)) {
+    $subaction = $id;
     $id = $action;
     $action = '';
 }
@@ -35,11 +68,20 @@ if ($action === 'imagens') {
 }
 
 try {
+    $controller = new ProdutoController();
     switch ($_SERVER['REQUEST_METHOD']) {
         case 'GET':
             if ($action === 'ativos') {
                 // GET /produtos/ativos
                 $result = $controller->ativos();
+                
+            } else if ($action === 'disponiveis') {
+                // GET /produtos/disponiveis (para fornecedores buscarem novos produtos)
+                $result = $controller->disponiveisParaVinculo();
+                
+            } else if ($action === 'publicos') {
+                // GET /produtos/publicos (produtos públicos para qualquer usuário)
+                $result = $controller->publicos();
                 
             } else if ($action === 'com-fornecedores') {
                 // GET /produtos/com-fornecedores ou /produtos/com-fornecedores/{id}
@@ -53,13 +95,19 @@ try {
                 // GET /produtos/{id}
                 $result = $controller->show($id);
                 
+            } else if ($action === 'minha-empresa') {
+                // GET /produtos/minha-empresa (produtos do fornecedor logado)
+                $result = $controller->minhaEmpresa();
+                
             } else {
                 // GET /produtos ou /produtos?filtros
                 $filters = [
                     'nome' => $_GET['nome'] ?? '',
                     'status' => $_GET['status'] ?? '',
                     'codigo_interno' => $_GET['codigo_interno'] ?? '',
-                    'descricao' => $_GET['descricao'] ?? ''
+                    'descricao' => $_GET['descricao'] ?? '',
+                    'fornecedor_id' => $_GET['fornecedor_id'] ?? '',
+                    'categoria_id' => $_GET['categoria_id'] ?? ''
                 ];
                 
                 $result = $controller->index($filters);
@@ -67,11 +115,22 @@ try {
             break;
             
         case 'POST':
-            if ($action === 'status' && !empty($id)) {
-                // POST /produtos/{id}/status
+            if ($action === 'minha-loja') {
+                // POST /produtos/minha-loja - Adicionar produto à minha loja (fornecedor)
+                $data = json_decode(file_get_contents('php://input'), true);
+                
+                // Se não veio JSON, pegar do POST normal
+                if (!$data) {
+                    $data = $_POST;
+                }
+                
+                $result = $controller->addToMyStore($data);
+                
+            } else if ($subaction === 'status' && !empty($id)) {
+                // POST /produtos/{id}/status - Alterar status do produto
                 $data = json_decode(file_get_contents('php://input'), true);
                 $status = $data['status'] ?? '';
-                $result = $controller->alterarStatus($id, $status);
+                $result = $controller->alterarStatusProduto($id, $status);
                 
             } else {
                 // POST /produtos

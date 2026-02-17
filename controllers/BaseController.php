@@ -4,6 +4,11 @@
  * Virtual Market System
  */
 
+// Garantir que PDOException esteja disponível
+if (!class_exists('PDOException')) {
+    class PDOException extends Exception {}
+}
+
 abstract class BaseController {
     
     public function __construct() {
@@ -99,6 +104,16 @@ abstract class BaseController {
     }
 
     /**
+     * Obter dados JSON da requisição
+     * @return array
+     */
+    protected function getJsonInput() {
+        $input = file_get_contents('php://input');
+        $data = json_decode($input, true);
+        return $data ?? [];
+    }
+
+    /**
      * Resposta de validação
      * @param array $errors
      * @return array
@@ -176,8 +191,14 @@ abstract class BaseController {
      * Obter token de autorização
      */
     protected function getAuthToken() {
-        $headers = getallheaders();
-        $authHeader = $headers['Authorization'] ?? $headers['authorization'] ?? null;
+        // Tentar primeiro $_SERVER para compatibilidade com CLI
+        $authHeader = $_SERVER['HTTP_AUTHORIZATION'] ?? null;
+        
+        // Se não encontrou e não está em CLI, tentar getallheaders()
+        if (!$authHeader && function_exists('getallheaders')) {
+            $headers = getallheaders();
+            $authHeader = $headers['Authorization'] ?? $headers['authorization'] ?? null;
+        }
         
         if ($authHeader && preg_match('/Bearer\s+(.*)$/i', $authHeader, $matches)) {
             return $matches[1];
@@ -210,6 +231,13 @@ abstract class BaseController {
         
         return null;
     }
+    
+    /**
+     * Alias para getUsuarioLogado (para compatibilidade)
+     */
+    protected function getAuthenticatedUser() {
+        return $this->getUsuarioLogado();
+    }
 
     /**
      * Verificar se usuário tem permissão
@@ -225,18 +253,35 @@ abstract class BaseController {
             return true; // Qualquer usuário logado
         }
         
-        return in_array($usuario['nivel'], $niveisPermitidos);
+        $nivelUsuario = $usuario['nivel'] ?? 'comum';
+        return in_array($nivelUsuario, $niveisPermitidos);
     }
 
     /**
      * Middleware de autenticação
      */
     protected function requireAuth($niveisPermitidos = []) {
-        if (!$this->verificarPermissao($niveisPermitidos)) {
-            $this->jsonResponse(['error' => 'Acesso não autorizado'], 401);
-            exit();
+        $usuario = $this->getUsuarioLogado();
+        
+        if (!$usuario) {
+            http_response_code(401);
+            header('Content-Type: application/json; charset=utf-8');
+            echo json_encode(['error' => 'Não autorizado', 'code' => 401], JSON_UNESCAPED_UNICODE);
+            exit;
         }
         
-        return $this->getUsuarioLogado();
+        if (empty($niveisPermitidos)) {
+            return $usuario; // Qualquer usuário logado
+        }
+        
+        $nivelUsuario = $usuario['nivel'] ?? 'comum';
+        if (!in_array($nivelUsuario, $niveisPermitidos)) {
+            http_response_code(403);
+            header('Content-Type: application/json; charset=utf-8');
+            echo json_encode(['error' => 'Acesso negado', 'code' => 403], JSON_UNESCAPED_UNICODE);
+            exit;
+        }
+        
+        return $usuario;
     }
 }

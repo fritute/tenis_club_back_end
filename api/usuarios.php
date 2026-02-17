@@ -1,8 +1,24 @@
 <?php
-header('Access-Control-Allow-Origin: *');
-header('Access-Control-Allow-Methods: GET, POST, PUT, DELETE, OPTIONS');
-header('Access-Control-Allow-Headers: Content-Type, Authorization');
-header('Content-Type: application/json; charset=utf-8');
+/**
+ * API Endpoints para Usuários
+ * Virtual Market System
+ */
+
+// CORS já configurado no router.php, mas garantir aqui também
+if (!headers_sent()) {
+    $allowed_origins = ['http://localhost:3000', 'http://localhost:3001', 'http://127.0.0.1:3000'];
+    $origin = $_SERVER['HTTP_ORIGIN'] ?? '';
+    if (in_array($origin, $allowed_origins)) {
+        header("Access-Control-Allow-Origin: {$origin}");
+    } else {
+        header("Access-Control-Allow-Origin: *");
+    }
+    header("Access-Control-Allow-Methods: GET, POST, PUT, DELETE, OPTIONS, PATCH");
+    header("Access-Control-Allow-Headers: Content-Type, Authorization, X-Requested-With, Accept");
+    header("Access-Control-Allow-Credentials: true");
+    header("Access-Control-Max-Age: 86400");
+    header('Content-Type: application/json; charset=utf-8');
+}
 
 // Tratar preflight OPTIONS request
 if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
@@ -10,7 +26,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
     exit();
 }
 
-require_once __DIR__ . '/../config/database.php';
+require_once __DIR__ . '/../config/config.php';
 require_once __DIR__ . '/../controllers/UsuarioController.php';
 
 $method = $_SERVER['REQUEST_METHOD'];
@@ -21,9 +37,8 @@ $pathArray = explode('/', trim($path, '/'));
 array_shift($pathArray); // remove 'api'
 array_shift($pathArray); // remove 'usuarios'
 
-$controller = new UsuarioController();
-
 try {
+    $controller = new UsuarioController();
     switch ($method) {
         case 'GET':
             if (empty($pathArray) || empty($pathArray[0])) {
@@ -53,9 +68,8 @@ try {
                 http_response_code(501);
                 echo json_encode(['error' => 'Funcionalidade não implementada']);
             } elseif ($pathArray[0] === 'validar-token') {
-                // POST /api/usuarios/validar-token - Validar token (TODO: implementar)
-                http_response_code(501);
-                echo json_encode(['error' => 'Funcionalidade não implementada']);
+                // POST /api/usuarios/validar-token - Validar token
+                $controller->validarToken();
             } else {
                 http_response_code(404);
                 echo json_encode(['error' => 'Endpoint não encontrado']);
@@ -95,14 +109,28 @@ try {
             echo json_encode(['error' => 'Método não permitido']);
             break;
     }
+} catch (PDOException $e) {
+    error_log("Erro PDO no endpoint usuarios: " . $e->getMessage());
+    error_log("SQL State: " . $e->getCode());
+    
+    http_response_code(500);
+    echo json_encode([
+        'error' => 'Erro ao conectar ao banco de dados',
+        'message' => $e->getMessage(),
+        'code' => 500
+    ], JSON_UNESCAPED_UNICODE);
 } catch (Exception $e) {
+    error_log("Erro no endpoint usuarios: " . $e->getMessage());
+    error_log("Stack trace: " . $e->getTraceAsString());
+    
     http_response_code(500);
     echo json_encode([
         'error' => 'Erro interno do servidor',
         'message' => $e->getMessage(),
+        'code' => 500,
         'debug' => [
             'file' => $e->getFile(),
             'line' => $e->getLine()
         ]
-    ]);
+    ], JSON_UNESCAPED_UNICODE);
 }

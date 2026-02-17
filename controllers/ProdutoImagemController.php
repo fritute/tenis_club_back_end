@@ -23,10 +23,89 @@ class ProdutoImagemController extends BaseController {
     public function listarPorProduto($produto_id) {
         try {
             $imagens = $this->produtoImagemModel->getImagensProduto($produto_id);
+            
+            // Fallback: se não houver registros no banco, tentar ler do filesystem
+            if (empty($imagens)) {
+                $fs = $this->listarFs($produto_id);
+                
+                if (!empty($fs)) {
+                    // Sincronizar FS -> persistência (DB ou JSON fallback)
+                    $ordem = 1;
+                    foreach ($fs as $img) {
+                        $dados = [
+                            'produto_id' => $produto_id,
+                            'nome_arquivo' => $img['nome_arquivo'],
+                            'caminho' => $img['caminho'],
+                            'descricao' => $img['descricao'] ?? '',
+                            'alt_text' => $img['alt_text'] ?? '',
+                            'tamanho' => $img['tamanho'] ?? 0,
+                            'tipo_mime' => $img['tipo_mime'] ?? 'image/*',
+                            'largura' => $img['largura'] ?? 0,
+                            'altura' => $img['altura'] ?? 0,
+                            'eh_principal' => $ordem === 1 ? 1 : 0,
+                            'ordem' => $ordem
+                        ];
+                        $this->produtoImagemModel->adicionarImagem($dados);
+                        $ordem++;
+                    }
+                    // Buscar novamente, agora já persistido
+                    $imagens = $this->produtoImagemModel->getImagensProduto($produto_id);
+                    return $this->jsonResponse($imagens);
+                }
+            }
             return $this->jsonResponse($imagens);
         } catch (Exception $e) {
             return $this->jsonResponse(['error' => 'Erro ao listar imagens: ' . $e->getMessage()], 500);
         }
+    }
+
+    /**
+     * Retornar apenas a foto principal de um produto para uso em cards
+     * Retorna URL da imagem ou placeholder se não houver
+     */
+    public function fotoPrincipal($produto_id) {
+        try {
+            $imagem = $this->produtoImagemModel->getImagemPrincipal($produto_id);
+            
+            if (!$imagem) {
+                // Retornar placeholder ou URL padrão
+                return $this->jsonResponse([
+                    'success' => true,
+                    'url' => '/uploads/produtos/placeholder.svg', // URL placeholder SVG
+                    'alt_text' => 'Imagem não disponível',
+                    'produto_id' => $produto_id,
+                    'is_placeholder' => true
+                ]);
+            }
+            
+            // Construir URL completa da imagem
+            $base_url = $this->getBaseUrl();
+            $url_imagem = $base_url . '/uploads/produtos/' . $produto_id . '/' . $imagem['nome_arquivo'];
+            
+            return $this->jsonResponse([
+                'success' => true,
+                'url' => $url_imagem,
+                'alt_text' => $imagem['alt_text'] ?? $imagem['descricao'] ?? 'Produto',
+                'produto_id' => $produto_id
+            ]);
+            
+        } catch (Exception $e) {
+            return $this->jsonResponse([
+                'success' => false,
+                'error' => 'Erro ao obter foto principal: ' . $e->getMessage(),
+                'url' => '/uploads/produtos/placeholder.svg',
+                'is_placeholder' => true
+            ], 500);
+        }
+    }
+
+    /**
+     * Obter URL base do sistema
+     */
+    private function getBaseUrl() {
+        $protocol = isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] === 'on' ? 'https' : 'http';
+        $host = $_SERVER['HTTP_HOST'] ?? 'localhost:8000';
+        return $protocol . '://' . $host;
     }
 
     /**
@@ -63,9 +142,51 @@ class ProdutoImagemController extends BaseController {
             //     return $this->jsonResponse(['error' => 'Sem permissão para fazer upload de imagens'], 403);
             // }
 
+            // Resolver arquivo em chaves alternativas
+            $chaves = ['imagem', 'file', 'arquivo', 'image', 'foto', 'imagens'];
+            $arquivo = null;
+            $chaveUsada = null;
+            foreach ($chaves as $k) {
+                if (isset($_FILES[$k])) {
+                    $chaveUsada = $k;
+                    // Se veio como array de arquivos (ex.: imagens[]), pegar o primeiro
+                    if (is_array($_FILES[$k]['name'])) {
+                        // Normalizar para um único arquivo
+                        $arquivo = [
+                            'name' => $_FILES[$k]['name'][0] ?? null,
+                            'type' => $_FILES[$k]['type'][0] ?? null,
+                            'tmp_name' => $_FILES[$k]['tmp_name'][0] ?? null,
+                            'error' => $_FILES[$k]['error'][0] ?? UPLOAD_ERR_NO_FILE,
+                            'size' => $_FILES[$k]['size'][0] ?? 0,
+                        ];
+                    } else {
+                        $arquivo = $_FILES[$k];
+                    }
+                    break;
+                }
+            }
+            
             // Verificar se arquivo foi enviado
-            if (!isset($_FILES['imagem']) || $_FILES['imagem']['error'] !== UPLOAD_ERR_OK) {
-                return $this->jsonResponse(['error' => 'Nenhum arquivo de imagem enviado'], 400);
+            if ($arquivo === null) {
+                $detalhes = [
+                    'mensagem' => 'Nenhum arquivo de imagem enviado. Envie multipart/form-data com o campo "imagem".',
+                    'content_type' => $_SERVER['CONTENT_TYPE'] ?? '',
+                    'chaves_recebidas' => array_keys($_FILES ?: []),
+                ];
+                return $this->jsonResponse(['error' => $detalhes['mensagem'], 'details' => $detalhes], 400);
+            }
+            if (($arquivo['error'] ?? UPLOAD_ERR_OK) !== UPLOAD_ERR_OK) {
+                $map = [
+                    UPLOAD_ERR_INI_SIZE => 'Arquivo excede upload_max_filesize do php.ini',
+                    UPLOAD_ERR_FORM_SIZE => 'Arquivo excede MAX_FILE_SIZE do formulário',
+                    UPLOAD_ERR_PARTIAL => 'Upload incompleto',
+                    UPLOAD_ERR_NO_FILE => 'Nenhum arquivo enviado',
+                    UPLOAD_ERR_NO_TMP_DIR => 'Diretório temporário ausente',
+                    UPLOAD_ERR_CANT_WRITE => 'Falha ao gravar no disco',
+                    UPLOAD_ERR_EXTENSION => 'Upload interrompido por extensão PHP',
+                ];
+                $msg = $map[$arquivo['error']] ?? ('Erro de upload código ' . $arquivo['error']);
+                return $this->jsonResponse(['error' => $msg], 400);
             }
 
             // Obter dados adicionais
@@ -78,8 +199,6 @@ class ProdutoImagemController extends BaseController {
                 return $this->jsonResponse(['error' => 'produto_id é obrigatório'], 400);
             }
 
-            $arquivo = $_FILES['imagem'];
-            
             // Validar tipo de arquivo
             $tipos_permitidos = ['image/jpeg', 'image/jpg', 'image/png', 'image/webp'];
             if (!in_array($arquivo['type'], $tipos_permitidos)) {
@@ -146,6 +265,47 @@ class ProdutoImagemController extends BaseController {
         } catch (Exception $e) {
             return $this->jsonResponse(['error' => 'Erro no upload: ' . $e->getMessage()], 500);
         }
+    }
+
+    /**
+     * Fallback: listar imagens diretamente do filesystem
+     */
+    private function listarFs($produto_id) {
+        $dir = __DIR__ . '/../uploads/produtos/' . $produto_id . '/';
+        if (!is_dir($dir)) {
+            return [];
+        }
+        $arquivos = @scandir($dir) ?: [];
+        $out = [];
+        $ordem = 1;
+        foreach ($arquivos as $f) {
+            if ($f === '.' || $f === '..') continue;
+            $path = $dir . $f;
+            if (!is_file($path)) continue;
+            $ext = strtolower(pathinfo($f, PATHINFO_EXTENSION));
+            if (!in_array($ext, ['jpg','jpeg','png','webp'])) continue;
+            $rel = 'uploads/produtos/' . $produto_id . '/' . $f;
+            $info = @getimagesize($path);
+            // Gerar ID negativo estável a partir do caminho (evita chaves React duplicadas)
+            $hash = sprintf('%u', crc32($rel));
+            $negId = 0 - (int)$hash;
+            $out[] = [
+                'id' => $negId,
+                'produto_id' => $produto_id,
+                'nome_arquivo' => $f,
+                'caminho' => $rel,
+                'descricao' => '',
+                'alt_text' => '',
+                'tamanho' => @filesize($path) ?: 0,
+                'tipo_mime' => $info['mime'] ?? 'image/*',
+                'largura' => $info[0] ?? 0,
+                'altura' => $info[1] ?? 0,
+                'eh_principal' => $ordem === 1 ? 1 : 0,
+                'ordem' => $ordem++,
+                'deletado_em' => null
+            ];
+        }
+        return $out;
     }
 
     /**

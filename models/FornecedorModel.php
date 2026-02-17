@@ -45,8 +45,11 @@ class FornecedorModel extends BaseModel {
         }
         
         // Validar status
-        if (!in_array($data['status'], ['Ativo', 'Inativo'])) {
+        if (isset($data['status']) && !in_array($data['status'], ['Ativo', 'Inativo'])) {
             $errors['status'] = 'Status deve ser Ativo ou Inativo';
+        } else if (!isset($data['status'])) {
+            // Status padrão se não fornecido
+            $data['status'] = 'Ativo';
         }
         
         return [
@@ -85,7 +88,7 @@ class FornecedorModel extends BaseModel {
             $stmt->execute($params);
             
             $result = $stmt->fetch();
-            return (int) $result['total'] > 0;
+            return $result && (int) $result['total'] > 0;
             
         } catch (PDOException $e) {
             error_log("Erro em cnpjExists: " . $e->getMessage());
@@ -113,7 +116,7 @@ class FornecedorModel extends BaseModel {
             $stmt->execute($params);
             
             $result = $stmt->fetch();
-            return (int) $result['total'] > 0;
+            return $result && (int) $result['total'] > 0;
             
         } catch (PDOException $e) {
             error_log("Erro em emailExists: " . $e->getMessage());
@@ -158,7 +161,8 @@ class FornecedorModel extends BaseModel {
      */
     public function countProdutos($id_fornecedor) {
         try {
-            $sql = "SELECT COUNT(*) as total FROM produto_fornecedor WHERE id_fornecedor = :id";
+            // Usando fornecedor_id conforme padronização do esquema
+            $sql = "SELECT COUNT(*) as total FROM produto_fornecedor WHERE fornecedor_id = :id";
             $stmt = $this->conn->prepare($sql);
             $stmt->bindParam(':id', $id_fornecedor);
             $stmt->execute();

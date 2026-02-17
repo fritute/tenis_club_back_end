@@ -4,6 +4,29 @@
  * Virtual Market System
  */
 
+// CORS já configurado no router.php, mas garantir aqui também
+if (!headers_sent()) {
+    $allowed_origins = ['http://localhost:3000', 'http://localhost:3001', 'http://127.0.0.1:3000', 'http://localhost:5173', 'http://127.0.0.1:5173'];
+    $origin = $_SERVER['HTTP_ORIGIN'] ?? '';
+    if ($origin && in_array($origin, $allowed_origins)) {
+        header("Access-Control-Allow-Origin: {$origin}");
+        header("Access-Control-Allow-Credentials: true");
+    } else {
+        header("Access-Control-Allow-Origin: *");
+    }
+    header("Vary: Origin");
+    header("Access-Control-Allow-Methods: GET, POST, PUT, DELETE, OPTIONS, PATCH");
+    header("Access-Control-Allow-Headers: Content-Type, Authorization, X-Requested-With, Accept");
+    header("Access-Control-Max-Age: 86400");
+    header('Content-Type: application/json; charset=utf-8');
+}
+
+// Tratar preflight OPTIONS request
+if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
+    http_response_code(200);
+    exit();
+}
+
 require_once __DIR__ . '/../controllers/CategoriaController.php';
 
 $controller = new CategoriaController();

@@ -73,12 +73,28 @@ class UsuarioController extends BaseController {
     public function criar() {
         try {
             $data = $this->getJsonData();
+            $allowed = ['nome','email','senha','nivel','fornecedor_id','status'];
+            $extra = [];
+            foreach ($data as $k => $v) {
+                if (!in_array($k, $allowed, true)) {
+                    $extra[] = $k;
+                    unset($data[$k]);
+                }
+            }
             
             // Validar dados
             $validation = $this->usuarioModel->validate($data);
+            
             if (!$validation['valid']) {
+                // Identificar erro mais específico para email duplicado
+                $mainError = 'Dados inválidos';
+                if (isset($validation['errors']['email']) && 
+                    strpos($validation['errors']['email'], 'já está cadastrado') !== false) {
+                    $mainError = $validation['errors']['email'];
+                }
+                
                 return $this->jsonResponse([
-                    'error' => 'Dados inválidos',
+                    'error' => $mainError,
                     'details' => $validation['errors']
                 ], 400);
             }
@@ -95,7 +111,11 @@ class UsuarioController extends BaseController {
                     'id' => $id
                 ], 201);
             } else {
-                return $this->jsonResponse(['error' => 'Erro ao criar usuário'], 500);
+                $msg = 'Erro ao criar usuário';
+                if (!empty($extra)) {
+                    $msg .= ' (campos ignorados: ' . implode(', ', $extra) . ')';
+                }
+                return $this->jsonResponse(['error' => $msg], 500);
             }
             
         } catch (Exception $e) {
@@ -160,7 +180,8 @@ class UsuarioController extends BaseController {
             }
             
             // Não permitir deletar executivo se for o único
-            if ($usuario['nivel'] === 'executivo') {
+            $nivelUsuario = $usuario['nivel'] ?? 'comum';
+            if ($nivelUsuario === 'executivo') {
                 $executivos = $this->usuarioModel->findByNivel('executivo');
                 if (count($executivos) <= 1) {
                     return $this->jsonResponse([
@@ -199,7 +220,20 @@ class UsuarioController extends BaseController {
             $resultado = $this->usuarioModel->login($data['email'], $data['senha']);
             
             if ($resultado['success']) {
-                return $this->jsonResponse($resultado);
+                // Estrutura compatível com frontend esperando data.userData
+                return $this->jsonResponse([
+                    'success' => true,
+                    'message' => $resultado['message'],
+                    'data' => [
+                        'userData' => $resultado['usuario'],
+                        'loja' => $resultado['loja'],
+                        'token' => $resultado['token']
+                    ],
+                    // Manter campos originais para backward compatibility
+                    'usuario' => $resultado['usuario'],
+                    'loja' => $resultado['loja'],  
+                    'token' => $resultado['token']
+                ]);
             } else {
                 return $this->jsonResponse(['error' => $resultado['message']], 401);
             }
@@ -255,6 +289,77 @@ class UsuarioController extends BaseController {
             
         } catch (Exception $e) {
             return $this->jsonResponse(['error' => 'Erro ao listar usuários: ' . $e->getMessage()], 500);
+        }
+    }
+    
+    /**
+     * Validar token JWT
+     * POST /api/usuarios/validar-token
+     */
+    public function validarToken() {
+        try {
+            // Obter dados do request
+            $data = $this->getJsonData();
+            
+            if (empty($data['token'])) {
+                return $this->jsonResponse([
+                    'success' => false,
+                    'valid' => false,
+                    'message' => 'Token não fornecido'
+                ], 400);
+            }
+            
+            $token = $data['token'];
+            
+            // Validar o token usando o modelo
+            $payload = $this->usuarioModel->validarToken($token);
+            
+            if (!$payload) {
+                return $this->jsonResponse([
+                    'success' => false,
+                    'valid' => false,
+                    'message' => 'Token inválido ou expirado'
+                ], 401);
+            }
+            
+            // Buscar dados completos do usuário
+            $usuario = $this->usuarioModel->findById($payload['id']);
+            
+            if (!$usuario) {
+                return $this->jsonResponse([
+                    'success' => false,
+                    'valid' => false,
+                    'message' => 'Usuário não encontrado'
+                ], 404);
+            }
+            
+            // Remove senha do retorno
+            unset($usuario['senha']);
+            
+            return $this->jsonResponse([
+                'success' => true,
+                'valid' => true,
+                'user' => $usuario,
+                'message' => 'Token válido'
+            ]);
+            
+        } catch (PDOException $e) {
+            error_log("Erro PDO em validarToken: " . $e->getMessage());
+            return $this->jsonResponse([
+                'success' => false,
+                'valid' => false,
+                'message' => 'Erro ao conectar ao banco de dados',
+                'error' => $e->getMessage()
+            ], 500);
+        } catch (Exception $e) {
+            error_log("Erro em validarToken: " . $e->getMessage());
+            error_log("Stack trace: " . $e->getTraceAsString());
+            return $this->jsonResponse([
+                'success' => false,
+                'valid' => false,
+                'message' => 'Erro interno ao validar token',
+                'error' => $e->getMessage()
+            ], 500);
         }
     }
 }

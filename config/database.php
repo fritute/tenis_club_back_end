@@ -1,187 +1,81 @@
 <?php
-/**
- * Database JSON - Virtual Market
- */
 class Database {
-    private $dataPath;
-    private $lastId = 0;
     private $conn;
 
     public function __construct() {
-        $this->dataPath = __DIR__ . '/../data/';
-        if (!is_dir($this->dataPath)) {
-            mkdir($this->dataPath, 0777, true);
+        $connections = [
+            'mysql' => [
+                'driver' => 'mysql',
+                'host' => $_ENV['DB_HOST'] ?? getenv('DB_HOST') ?: 'localhost',
+                'port' => $_ENV['DB_PORT'] ?? getenv('DB_PORT') ?: '3306',
+                'database' => $_ENV['DB_NAME'] ?? getenv('DB_NAME') ?: 'tenis_club',
+                'username' => $_ENV['DB_USERNAME'] ?? $_ENV['DB_USER'] ?? getenv('DB_USER') ?: 'root',
+                'password' => $_ENV['DB_PASSWORD'] ?? $_ENV['DB_PASS'] ?? getenv('DB_PASS') ?: '',
+                'charset' => $_ENV['DB_CHARSET'] ?? getenv('DB_CHARSET') ?: 'utf8mb4',
+                'collation' => 'utf8mb4_unicode_ci',
+                'options' => [
+                    PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION,
+                    PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
+                    PDO::ATTR_EMULATE_PREPARES => false,
+                ],
+            ],
+            'sqlite' => [
+                'driver' => 'sqlite',
+                'database' => __DIR__ . '/../storage/database.sqlite',
+                'foreign_key_constraints' => true,
+                'options' => [
+                    PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION,
+                    PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
+                    PDO::ATTR_EMULATE_PREPARES => false,
+                ],
+            ],
+        ];
+        $defaultRaw = $_ENV['DB_CONNECTION'] ?? getenv('DB_CONNECTION') ?: 'mysql';
+        $default = strtolower(trim($defaultRaw));
+        if (!isset($connections[$default])) {
+            if (stripos($defaultRaw, 'mysql') !== false) {
+                $default = 'mysql';
+            } else {
+                $default = 'sqlite';
+            }
         }
-        $this->conn = $this; // Para compatibilidade
+        $cfg = $connections[$default];
+
+        if ($cfg['driver'] === 'mysql') {
+            $host = $cfg['host'];
+            $is_local = in_array($host, ['localhost', '127.0.0.1']);
+            if (!$is_local) {
+                throw new RuntimeException('Conexões remotas não são permitidas. Use host=localhost ou 127.0.0.1');
+            }
+            if (empty($cfg['host']) || empty($cfg['port']) || empty($cfg['database']) || $cfg['username'] === null || $cfg['password'] === null) {
+                throw new RuntimeException('Variáveis de ambiente do banco ausentes');
+            }
+            $dsnEnv = $_ENV['DB_DSN'] ?? getenv('DB_DSN');
+            $dsn = $dsnEnv ?: "mysql:host={$cfg['host']};port={$cfg['port']};dbname={$cfg['database']};charset={$cfg['charset']}";
+            try {
+                $this->conn = new PDO($dsn, $cfg['username'], $cfg['password'], $cfg['options']);
+            } catch (PDOException $e) {
+                $msg = $e->getMessage();
+                if (stripos($msg, 'could not find driver') !== false) {
+                    throw new RuntimeException('Driver pdo_mysql ausente ou não carregado');
+                }
+                throw new PDOException($msg, (int)$e->getCode());
+            }
+        } else {
+            $dsn = "sqlite:{$cfg['database']}";
+            try {
+                $this->conn = new PDO($dsn, null, null, $cfg['options']);
+            } catch (PDOException $e) {
+                $msg = $e->getMessage();
+                if (stripos($msg, 'could not find driver') !== false) {
+                    throw new RuntimeException('Driver pdo_sqlite ausente ou não carregado');
+                }
+                throw new PDOException($msg, (int)$e->getCode());
+            }
+        }
     }
 
     public function getConnection() {
-        return $this;
-    }
-
-    // Compatibilidade PDO
-    public function prepare($sql) {
-        return new DatabaseStatement($this, $sql);
-    }
-
-    public function closeConnection() {
-        // Não faz nada, só para compatibilidade
-        return true;
-    }
-
-    public function fetchAll($table) {
-        $file = $this->dataPath . $table . '.json';
-        if (!file_exists($file)) return [];
-        $json = file_get_contents($file);
-        $data = json_decode($json, true);
-        return is_array($data) ? $data : [];
-    }
-
-    public function insert($table, $row) {
-        $data = $this->fetchAll($table);
-        $row['id'] = $this->getNextId($data);
-        $this->lastId = $row['id'];
-        $data[] = $row;
-        file_put_contents($this->dataPath . $table . '.json', json_encode($data, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE));
-        return $row['id'];
-    }
-
-    public function update($table, $id, $row) {
-        $data = $this->fetchAll($table);
-        foreach ($data as &$item) {
-            if ($item['id'] == $id) {
-                $item = array_merge($item, $row);
-            }
-        }
-        file_put_contents($this->dataPath . $table . '.json', json_encode($data, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE));
-        return true;
-    }
-
-    public function delete($table, $id) {
-        $data = $this->fetchAll($table);
-        $data = array_filter($data, function($item) use ($id) {
-            return $item['id'] != $id;
-        });
-        file_put_contents($this->dataPath . $table . '.json', json_encode(array_values($data), JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE));
-        return true;
-    }
-
-    public function lastInsertId() {
-        return $this->lastId;
-    }
-
-    private function getNextId($data) {
-        $max = 0;
-        foreach ($data as $item) {
-            if (isset($item['id']) && $item['id'] > $max) {
-                $max = $item['id'];
-            }
-        }
-        return $max + 1;
-    }
-}
-
-// Classe de compatibilidade para statements
-class DatabaseStatement {
-    private $db;
-    private $sql;
-    private $params = [];
-
-    public function __construct($db, $sql) {
-        $this->db = $db;
-        $this->sql = $sql;
-    }
-    public function execute($params = []) {
-        $this->params = array_merge($this->params, $params);
-        
-        // Processar INSERT
-        if (preg_match('/INSERT INTO ([a-z_]+)/i', $this->sql, $matches)) {
-            $table = $matches[1];
-            $data = [];
-            
-            // Extrair valores dos parâmetros
-            foreach ($this->params as $key => $value) {
-                $cleanKey = ltrim($key, ':');
-                $data[$cleanKey] = $value;
-            }
-            
-            return $this->db->insert($table, $data);
-        }
-        
-        // Processar UPDATE
-        if (preg_match('/UPDATE ([a-z_]+)/i', $this->sql, $matches)) {
-            $table = $matches[1];
-            
-            // Extrair ID dos parâmetros ou do WHERE
-            $id = null;
-            if (isset($this->params[':id'])) {
-                $id = $this->params[':id'];
-            } elseif (preg_match('/WHERE.*?=\s*:?([0-9]+)/i', $this->sql, $whereMatches)) {
-                $id = $whereMatches[1];
-            }
-            
-            if ($id) {
-                $data = [];
-                foreach ($this->params as $key => $value) {
-                    $cleanKey = ltrim($key, ':');
-                    if ($cleanKey !== 'id') {  // Não incluir o ID nos dados de atualização
-                        $data[$cleanKey] = $value;
-                    }
-                }
-                return $this->db->update($table, $id, $data);
-            }
-        }
-        
-        // Processar DELETE
-        if (preg_match('/DELETE FROM ([a-z_]+)/i', $this->sql, $matches)) {
-            $table = $matches[1];
-            if (preg_match('/WHERE.*?=\s*:?([0-9]+)/i', $this->sql, $whereMatches)) {
-                $id = $whereMatches[1];
-                return $this->db->delete($table, $id);
-            }
-        }
-        
-        // Outros casos (SELECT etc)
-        return true;
-    }
-    public function fetchAll() {
-        // Extrair nome da tabela
-        if (preg_match('/FROM ([a-z_]+)/i', $this->sql, $matches)) {
-            $table = $matches[1];
-            $data = $this->db->fetchAll($table);
-            
-            // Aplicar filtros WHERE se houver
-            if (preg_match('/WHERE\s+([a-z_]+)\s*=\s*:([a-z_]+)/i', $this->sql, $whereMatches)) {
-                $field = $whereMatches[1];
-                $paramName = ':' . $whereMatches[2];
-                
-                if (isset($this->params[$paramName])) {
-                    $value = $this->params[$paramName];
-                    $data = array_filter($data, function($item) use ($field, $value) {
-                        return isset($item[$field]) && $item[$field] == $value;
-                    });
-                }
-            }
-            
-            return array_values($data);
-        }
-        return [];
-    }
-    public function fetch() {
-        $all = $this->fetchAll();
-        return $all ? $all[0] : false;
-    }
-    public function rowCount() {
-        $all = $this->fetchAll();
-        return count($all);
-    }
-    public function bindParam($param, &$var) {
-        // Compatibilidade fake
-        $this->params[$param] = $var;
-        return true;
-    }
-    public function bindValue($param, $value) {
-        $this->params[$param] = $value;
-        return true;
+        return $this->conn;
     }
 }

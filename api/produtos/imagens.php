@@ -1,7 +1,10 @@
 <?php
 header('Access-Control-Allow-Origin: *');
-header('Access-Control-Allow-Methods: GET, POST, PUT, DELETE, OPTIONS');
-header('Access-Control-Allow-Headers: Content-Type, Authorization');
+header('Vary: Origin');
+header('Access-Control-Allow-Methods: GET, POST, PUT, DELETE, OPTIONS, PATCH');
+header('Access-Control-Allow-Headers: Content-Type, Authorization, X-Requested-With, Accept');
+header('Access-Control-Allow-Credentials: true');
+header('Access-Control-Max-Age: 86400');
 header('Content-Type: application/json; charset=utf-8');
 
 // Tratar preflight OPTIONS request
@@ -27,7 +30,10 @@ $controller = new ProdutoImagemController();
 try {
     switch ($method) {
         case 'GET':
-            if (empty($pathArray) || empty($pathArray[0])) {
+            if (!empty($pathArray) && $pathArray[0] === 'principal' && !empty($pathArray[1])) {
+                // GET /api/produtos/imagens/principal/{produto_id} - Foto principal para card
+                $controller->fotoPrincipal($pathArray[1]);
+            } elseif (empty($pathArray) || empty($pathArray[0])) {
                 // GET /api/produtos/imagens - Precisa de produto_id como query param
                 if (!isset($_GET['produto_id'])) {
                     http_response_code(400);

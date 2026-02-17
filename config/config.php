@@ -4,6 +4,25 @@
  * Tenis Club System
  */
 
+$__env_file = __DIR__ . '/../.env';
+if (file_exists($__env_file)) {
+    $lines = file($__env_file, FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES);
+    foreach ($lines as $line) {
+        $trim = ltrim($line);
+        if ($trim === '' || $trim[0] === '#') { continue; }
+        $parts = explode('=', $line, 2);
+        if (count($parts) === 2) {
+            $k = trim($parts[0]);
+            $v = trim($parts[1]);
+            $v = trim($v, "\"'");
+            if ($k !== '' && getenv($k) === false) {
+                $_ENV[$k] = $v;
+                putenv($k . '=' . $v);
+            }
+        }
+    }
+}
+
 // Definir timezone
 date_default_timezone_set('America/Sao_Paulo');
 
@@ -22,13 +41,8 @@ if (session_status() == PHP_SESSION_NONE) {
     session_start();
 }
 
-// Headers para AJAX
-header('Content-Type: application/json; charset=utf-8');
-
-// CORS (se necessário para desenvolvimento)
-header("Access-Control-Allow-Origin: *");
-header("Access-Control-Allow-Methods: GET, POST, PUT, DELETE, OPTIONS");
-header("Access-Control-Allow-Headers: Content-Type, Authorization");
+// CORS headers são configurados no router.php e api/index.php
+// Não enviar headers aqui para evitar duplicação
 
 // Função para retornar resposta JSON
 function jsonResponse($data, $status = 200) {

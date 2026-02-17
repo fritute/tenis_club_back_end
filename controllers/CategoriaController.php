@@ -200,13 +200,13 @@ class CategoriaController extends BaseController {
      * Listar apenas categorias ativas
      * @return array
      */
-    public function ativas() {
+    public function ativasLegado() {
         try {
             $categorias = $this->categoriaModel->findAtivas();
             return $this->successResponse($categorias, 'Categorias ativas listadas');
             
         } catch (Exception $e) {
-            error_log("Erro em CategoriaController::ativas: " . $e->getMessage());
+            error_log("Erro em CategoriaController::ativasLegado: " . $e->getMessage());
             return $this->errorResponse('Erro ao listar categorias ativas');
         }
     }
@@ -275,6 +275,23 @@ class CategoriaController extends BaseController {
         } catch (Exception $e) {
             error_log("Erro em CategoriaController::alterarStatus: " . $e->getMessage());
             return $this->errorResponse('Erro interno ao alterar status');
+        }
+    }
+
+    /**
+     * Listar categorias ativas (para usuários visualizarem)
+     * @return array
+     */
+    public function ativas() {
+        try {
+            // Qualquer usuário pode ver categorias ativas
+            $categorias = $this->categoriaModel->findAll("status = 'Ativo'", [], 'nome ASC');
+            
+            return $this->successResponse($categorias, 'Categorias ativas listadas');
+            
+        } catch (Exception $e) {
+            error_log("Erro em CategoriaController::ativas: " . $e->getMessage());
+            return $this->errorResponse('Erro ao listar categorias ativas');
         }
     }
 }

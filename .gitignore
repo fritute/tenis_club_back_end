@@ -1,0 +1,26 @@
+# Logs
+logs/
+*.log
+
+# Ambiente
+.env
+.env.local
+
+# Uploads
+uploads/*/*
+
+# Cache
+cache/
+
+# IDEs
+.vscode/
+.idea/
+*.sublime-*
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Backup
+*_backup.*
+*.bak

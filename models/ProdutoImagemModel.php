@@ -72,7 +72,6 @@ class ProdutoImagemModel extends BaseModel {
             'altura' => $dados['altura'] ?? 0,
             'eh_principal' => $dados['eh_principal'] ?? false,
             'ordem' => $dados['ordem'] ?? $this->getProximaOrdem($dados['produto_id']),
-            'criado_em' => date('Y-m-d H:i:s'),
             'deletado_em' => null
         ];
         
@@ -83,17 +82,21 @@ class ProdutoImagemModel extends BaseModel {
      * Buscar imagens de um produto
      */
     public function getImagensProduto($produtoId) {
-        $imagens = $this->findAll();
-        $imagensProduto = array_filter($imagens, function($img) use ($produtoId) {
-            return $img['produto_id'] == $produtoId && empty($img['deletado_em']);
-        });
-        
-        // Ordenar por ordem
-        usort($imagensProduto, function($a, $b) {
-            return ($a['ordem'] ?? 0) - ($b['ordem'] ?? 0);
-        });
-        
-        return array_values($imagensProduto);
+        try {
+            $sql = "SELECT * FROM " . $this->table_name . " 
+                    WHERE produto_id = :produto_id 
+                    AND (deletado_em IS NULL)
+                    ORDER BY ordem ASC, id ASC";
+            $stmt = $this->conn->prepare($sql);
+            $stmt->bindParam(':produto_id', $produtoId);
+            $stmt->execute();
+            
+            return $stmt->fetchAll();
+            
+        } catch (PDOException $e) {
+            error_log("Erro em getImagensProduto: " . $e->getMessage());
+            return [];
+        }
     }
 
     /**
@@ -109,17 +112,24 @@ class ProdutoImagemModel extends BaseModel {
         }
         
         $produtoId = $imagem['produto_id'];
-        $imagens = $this->findAll();
         
-        // Desmarcar todas as imagens do produto como principal
-        foreach ($imagens as $img) {
-            if ($img['produto_id'] == $produtoId && !empty($img['eh_principal'])) {
-                $this->update($img['id'], ['eh_principal' => false]);
-            }
+        try {
+            // Desmarcar todas as imagens do produto como principal
+            $sql = "UPDATE " . $this->table_name . " 
+                    SET eh_principal = 0 
+                    WHERE produto_id = :produto_id AND id != :imagem_id";
+            $stmt = $this->conn->prepare($sql);
+            $stmt->bindParam(':produto_id', $produtoId);
+            $stmt->bindParam(':imagem_id', $imagemId);
+            $stmt->execute();
+            
+            // Marcar a imagem atual como principal
+            return $this->update($imagemId, ['eh_principal' => true]);
+            
+        } catch (PDOException $e) {
+            error_log("Erro em definirImagemPrincipal: " . $e->getMessage());
+            return false;
         }
-        
-        // Marcar a imagem atual como principal
-        return $this->update($imagemId, ['eh_principal' => true]);
     }
 
     /**
@@ -161,17 +171,37 @@ class ProdutoImagemModel extends BaseModel {
      * Obter imagem principal do produto
      */
     public function getImagemPrincipal($produtoId) {
-        $imagens = $this->getImagensProduto($produtoId);
-        
-        // Procurar por imagem marcada como principal
-        foreach ($imagens as $img) {
-            if ($img['principal'] ?? false) {
-                return $img;
+        try {
+            $sql = "SELECT * FROM " . $this->table_name . " 
+                    WHERE produto_id = :produto_id 
+                    AND (deletado_em IS NULL)
+                    AND eh_principal = 1
+                    LIMIT 1";
+            $stmt = $this->conn->prepare($sql);
+            $stmt->bindParam(':produto_id', $produtoId);
+            $stmt->execute();
+            
+            $result = $stmt->fetch();
+            
+            // Se não encontrou principal, buscar a primeira por ordem
+            if (!$result) {
+                $sql = "SELECT * FROM " . $this->table_name . " 
+                        WHERE produto_id = :produto_id 
+                        AND (deletado_em IS NULL)
+                        ORDER BY ordem ASC, id ASC
+                        LIMIT 1";
+                $stmt = $this->conn->prepare($sql);
+                $stmt->bindParam(':produto_id', $produtoId);
+                $stmt->execute();
+                $result = $stmt->fetch();
             }
+            
+            return $result ?: null;
+            
+        } catch (PDOException $e) {
+            error_log("Erro em getImagemPrincipal: " . $e->getMessage());
+            return null;
         }
-        
-        // Se não tem principal, retorna a primeira
-        return $imagens[0] ?? null;
     }
 
     /**
@@ -198,17 +228,33 @@ class ProdutoImagemModel extends BaseModel {
      * Buscar produtos com mais imagens
      */
     public function getProdutosMaisImagens($limite = 10) {
-        $imagens = $this->findAll();
-        $contadores = [];
-        
-        foreach ($imagens as $img) {
-            if ($img['ativo']) {
-                $produtoId = $img['produto_id'];
-                $contadores[$produtoId] = ($contadores[$produtoId] ?? 0) + 1;
+        try {
+            $sql = "
+                SELECT 
+                    produto_id,
+                    COUNT(*) as total_imagens
+                FROM " . $this->table_name . "
+                WHERE deletado_em IS NULL OR deletado_em = ''
+                GROUP BY produto_id
+                ORDER BY total_imagens DESC
+                LIMIT :limite
+            ";
+            
+            $stmt = $this->conn->prepare($sql);
+            $stmt->bindValue(':limite', (int)$limite, PDO::PARAM_INT);
+            $stmt->execute();
+            
+            $result = $stmt->fetchAll();
+            $contadores = [];
+            foreach ($result as $row) {
+                $contadores[$row['produto_id']] = (int)$row['total_imagens'];
             }
+            
+            return $contadores;
+            
+        } catch (PDOException $e) {
+            error_log("Erro em getProdutosMaisImagens: " . $e->getMessage());
+            return [];
         }
-        
-        arsort($contadores);
-        return array_slice($contadores, 0, $limite, true);
     }
 }

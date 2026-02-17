@@ -18,6 +18,12 @@ ALTER TABLE
     `usuarios` ADD INDEX `usuarios_fornecedor_id_index`(`fornecedor_id`);
 ALTER TABLE
     `usuarios` ADD INDEX `usuarios_status_index`(`status`);
+    
+INSERT INTO categorias (nome, descricao)
+VALUES ('olaasd', 'Produtos eletrônicos em geral');
+
+select * from usuarios;
+
 CREATE TABLE `categorias`(
     `id` INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
     `nome` VARCHAR(100) NOT NULL,
@@ -127,11 +133,12 @@ ALTER TABLE
     `produto_fornecedor` ADD INDEX `produto_fornecedor_fornecedor_id_index`(`fornecedor_id`);
 ALTER TABLE
     `produto_fornecedor` ADD INDEX `produto_fornecedor_id_fornecedor_index`(`id_fornecedor`);
+    show tables;
 CREATE TABLE `pedidos`(
     `id` INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
     `usuario_id` INT NOT NULL COMMENT 'Cliente que fez o pedido',
     `fornecedor_id` INT NOT NULL COMMENT 'Fornecedor/empresa que receberá o pedido',
-    `status` ENUM(
+	`status` ENUM(
         'pendente',
         'confirmado',
         'enviado',
@@ -141,7 +148,7 @@ CREATE TABLE `pedidos`(
     `endereco_entrega` JSON NOT NULL COMMENT 'Endereço completo de entrega em formato JSON',
     `valor_total` DECIMAL(10, 2) NOT NULL DEFAULT 0,
     `observacoes` TEXT NULL COMMENT 'Observações do cliente sobre o pedido',
-    `created_at` TIMESTAMP NULL DEFAULT CURRENT_TIMESTAMP(), `updated_at` TIMESTAMP NULL DEFAULT CURRENT_TIMESTAMP());
+	`created_at` TIMESTAMP NULL DEFAULT CURRENT_TIMESTAMP(), `updated_at` TIMESTAMP NULL DEFAULT CURRENT_TIMESTAMP());
 ALTER TABLE
     `pedidos` ADD INDEX `pedidos_usuario_id_index`(`usuario_id`);
 ALTER TABLE
@@ -187,4 +194,43 @@ ALTER TABLE
 ALTER TABLE
     `precos_fornecedor` ADD CONSTRAINT `precos_fornecedor_id_fornecedor_foreign` FOREIGN KEY(`id_fornecedor`) REFERENCES `fornecedores`(`id`);
 ALTER TABLE
-    `produto_fornecedor` ADD CONSTRAINT `produto_fornecedor_produto_id_foreign` FOREIGN KEY(`produto_id`) REFERENCES `produtos`(`id`);
+			`produto_fornecedor` ADD CONSTRAINT `produto_fornecedor_produto_id_foreign` FOREIGN KEY(`produto_id`) REFERENCES `produtos`(`id`);
+		
+        
+        
+        ALTER TABLE pedidos MODIFY COLUMN status ENUM('pendente', 'confirmado', 'em_separacao', 'em_transito', 'entregue', 'cancelado', 'enviado') NOT NULL DEFAULT 'pendente';
+        
+   SELECT * FROM pedido_itens;
+
+    
+    INSERT INTO categorias (nome, descricao, status) VALUES
+('Bebidas', 'Categoria de bebidas em geral', 'Ativo'),
+('Alimentos', 'Categoria de alimentos', 'Ativo'),
+('Higiene', 'Produtos de higiene pessoal', 'Ativo'),
+('Limpeza', 'Produtos de limpeza', 'Ativo'),
+('Padaria', 'Produtos de padaria', 'Ativo');
+
+SELECT 
+    p.id, 
+    p.nome AS produto, 
+    c.nome AS categoria, 
+    f.nome AS fornecedor
+FROM produtos p
+INNER JOIN categorias c ON p.categoria_id = c.id
+INNER JOIN fornecedores f ON p.fornecedor_id = f.id;
+
+SELECT 
+    p.id, 
+    p.nome AS produto, 
+    c.nome AS categoria
+FROM produtos p
+LEFT JOIN categorias c ON p.categoria_id = c.id;
+
+SELECT 
+    f.nome AS fornecedor,
+    p.nome AS produto,
+    pf.preco_fornecedor
+FROM produto_fornecedor pf
+INNER JOIN fornecedores f ON pf.fornecedor_id = f.id
+INNER JOIN produtos p ON pf.produto_id = p.id
+WHERE p.id = 1;
